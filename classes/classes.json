@@ -1,0 +1,251 @@
+{
+  "license plate": {
+    "hints": [
+      "license plate",
+      "number plate",
+      "registration plate"
+    ],
+    "prompts": [
+      "a clearly visible license plate, showing most of its parts",
+      "a clearly visible number plate, showing most of its parts",
+      "a clearly visible registration plate, showing most of its parts"
+    ]
+  },
+  "car": {
+    "hints": [
+      "car",
+      "automobile",
+      "sedan",
+      "hatchback",
+      "SUV",
+      "coupe",
+      "minivan",
+      "pickup car",
+      "convertible",
+      "bus",
+      "minibus",
+      "double-decker bus",
+      "school bus",
+      "transit bus",
+      "motorcoach",
+      "truck",
+      "lorry",
+      "container truck",
+      "cargo truck",
+      "dump truck",
+      "pickup truck",
+      "semi-truck",
+      "freight truck",
+      "vehicle",
+      "van",
+      "pickup",
+      "trailer truck"
+    ],
+    "prompts": [
+      "a clearly visible car, showing most of its parts",
+      "a clearly visible automobile car, showing most of its parts",
+      "a clearly visible sedan car, showing most of its parts",
+      "a clearly visible hatchback car, showing most of its parts",
+      "a clearly visible SUV car, showing most of its parts",
+      "a clearly visible coupe car, showing most of its parts",
+      "a clearly visible minivan, showing most of its parts",
+      "a clearly visible convertible car, showing most of its parts",
+      "a clearly visible van, showing most of its parts",
+      "a clearly visible taxi car, showing most of its parts",
+      "a clearly visible pickup truck, showing most of its parts"
+    ]
+  },
+  "bus": {
+    "hints": [
+      "car",
+      "automobile",
+      "sedan",
+      "hatchback",
+      "SUV",
+      "coupe",
+      "minivan",
+      "pickup car",
+      "convertible",
+      "bus",
+      "minibus",
+      "double-decker bus",
+      "school bus",
+      "transit bus",
+      "motorcoach",
+      "truck",
+      "lorry",
+      "container truck",
+      "cargo truck",
+      "dump truck",
+      "pickup truck",
+      "semi-truck",
+      "freight truck",
+      "vehicle",
+      "van",
+      "pickup",
+      "trailer truck"
+    ],
+    "prompts": [
+      "a clearly visible bus, showing most of its parts",
+      "a clearly visible minibus, showing most of its parts",
+      "a clearly visible double-decker bus, showing most of its parts",
+      "a clearly visible school bus, showing most of its parts",
+      "a clearly visible transit bus, showing most of its parts"
+    ]
+  },
+  "truck": {
+    "hints": [
+      "car",
+      "automobile",
+      "sedan",
+      "hatchback",
+      "SUV",
+      "coupe",
+      "minivan",
+      "pickup car",
+      "convertible",
+      "bus",
+      "minibus",
+      "double-decker bus",
+      "school bus",
+      "transit bus",
+      "motorcoach",
+      "truck",
+      "lorry",
+      "container truck",
+      "cargo truck",
+      "dump truck",
+      "pickup truck",
+      "semi-truck",
+      "freight truck",
+      "vehicle",
+      "van",
+      "pickup",
+      "trailer truck"
+    ],
+    "prompts": [
+      "a clearly visible truck, showing most of its parts",
+      "a clearly visible lorry, showing most of its parts",
+      "a clearly visible container truck, showing most of its parts",
+      "a clearly visible cargo truck, showing most of its parts",
+      "a clearly visible dump truck, showing most of its parts",
+      "a clearly visible semi-truck, showing most of its parts",
+      "a clearly visible freight truck, showing most of its parts",
+      "a clearly visible tanker truck, showing most of its parts",
+      "a clearly visible trailer truck, showing most of its parts",
+      "a clearly visible concrete mixer truck, showing most of its parts"
+    ]
+  },
+  "motorcycle": {
+    "hints": [
+      "motorbike",
+      "motorcycle",
+      "scooter",
+      "moped",
+      "bicycle",
+      "e-bike"
+    ],
+    "prompts": [
+      "a clearly visible motorbike, showing most of its parts",
+      "a clearly visible motorcycle, showing most of its parts",
+      "a clearly visible moped, showing most of its parts",
+      "a clearly visible bicycle, showing most of its parts",
+      "a clearly visible e-bike, showing most of its parts"
+    ]
+  },
+  "person": {
+    "hints": [
+      "person",
+      "human",
+      "pedestrian",
+      "man",
+      "woman"
+    ],
+    "prompts": [
+      "a clearly visible person, showing most of their body",
+      "a clearly visible human, showing most of their body",
+      "a clearly visible pedestrian, showing most of their body",
+      "a clearly visible man, showing most of his body",
+      "a clearly visible woman, showing most of her body",
+      "a clearly visible child, showing most of their body"
+    ]
+  },
+  "fire": {
+    "hints": [
+      "fire",
+      "flame",
+      "blaze",
+      "flames",
+      "wildfire"
+    ],
+    "prompts": [
+      "a clearly visible fire, showing most of its parts",
+      "a clearly visible flame, showing most of its parts",
+      "a clearly visible blaze, showing most of its parts",
+      "a clearly visible flames, showing most of its parts",
+      "a clearly visible wildfire, showing most of its parts"
+    ]
+  },
+  "smoke": {
+    "hints": [
+      "smoke",
+      "smoke cloud"
+    ],
+    "prompts": [
+      "a clearly visible smoke, showing most of its parts",
+      "a clearly visible smoke cloud, showing most of its parts",
+      "a clearly visible plume of smoke, showing most of its parts",
+      "a clearly visible smoke trail, showing most of its parts"
+    ]
+  },
+  "weapon": {
+    "hints": [
+      "weapon",
+      "gun",
+      "pistol",
+      "rifle",
+      "knife",
+      "firearm",
+      "dagger",
+      "sword",
+      "machete"
+    ],
+    "prompts": [
+      "a clearly visible weapon, showing most of its parts",
+      "a clearly visible gun, showing most of its parts",
+      "a clearly visible pistol, showing most of its parts",
+      "a clearly visible rifle, showing most of its parts",
+      "a clearly visible knife, showing most of its parts",
+      "a clearly visible firearm, showing most of its parts",
+      "a clearly visible dagger, showing most of its parts",
+      "a clearly visible sword, showing most of its parts",
+      "a clearly visible machete, showing most of its parts"
+    ]
+  },
+  "helmet": {
+    "hints": [
+      "head",
+      "human head",
+      "person's head",
+      "helmet",
+      "motorcycle helmet"
+    ],
+    "prompts": [
+      "a clearly visible head wearing a helmet, showing most of both the head and the helmet",
+      "a clearly visible rider's head wearing a motorcycle helmet, showing most of both the head and the helmet",
+      "a clearly visible head wearing a safety helmet, showing most of both the head and the helmet",
+      "a clearly visible head wearing a hard hat, showing most of both the head and the hard hat"
+    ]
+  },
+  "no helmet": {
+    "hints": [
+      "head",
+      "human head",
+      "person's head"
+    ],
+    "prompts": [
+      "a clearly visible head with no helmet, showing most of its parts",
+      "a clearly visible bare or uncovered head, showing most of its parts, without any helmet"
+    ]
+  }
+}

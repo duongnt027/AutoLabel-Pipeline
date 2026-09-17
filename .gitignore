@@ -1,0 +1,13 @@
+# Cấu hình của từng máy (chứa HF_TOKEN) — chỉ commit .env.example
+.env
+
+# Repo bên thứ ba + weight: tải bằng setup/get_third_party.sh, vài GB mỗi cái
+third_party/
+
+# Kết quả chạy (proposal, điểm, nhãn) và env đã đóng gói
+runs/
+dist/
+
+__pycache__/
+*.pyc
+job_883/
