@@ -9,6 +9,7 @@
     python run_pipeline.py /duong/dan/anh
     python run_pipeline.py /duong/dan/anh --models llm,s3 --min-conf 0.3
     python run_pipeline.py /duong/dan/anh --limit 20     # thử 20 ảnh đầu
+    python run_pipeline.py /duong/dan/anh --describe     # VLX tự sinh prompt theo ảnh
 
 Kết quả trong runs/<tên thư mục ảnh>/:
     labels/*.txt            nhãn YOLO cuối cùng (cùng tên với ảnh)
@@ -41,6 +42,9 @@ def main():
                     help=f"giữ box khi VLX chấm >= mức này (mặc định {P.MIN_CONF})")
     ap.add_argument("--data-yaml", type=Path, default=P.DATA_YAML,
                     help="tuỳ chọn: ép id class theo file này thay vì thứ tự trong classes.json")
+    ap.add_argument("--describe", action=argparse.BooleanOptionalAction, default=P.DESCRIBE,
+                    help="stage 2: VLX tự mô tả box (theo alias) rồi dùng chính mô tả đó "
+                         "làm prompt verify, thay cho prompt cố định")
     args = ap.parse_args()
     models = P.apply_common_args(args)
 
@@ -61,7 +65,7 @@ def main():
     P.step(3, "Stage 2 — VLX-Seek chấm điểm từng box theo prompt của class", total)
     for key in models:
         print(f"   ── backend {key} ──")
-        P.run_stage2(key, jobs, args.limit)
+        P.run_stage2(key, jobs, args.limit, args.describe)
 
     P.step(4, f"Dựng nhãn YOLO (min_conf={args.min_conf})", total)
     classes = load_classes(P.CLASSES_JSON)

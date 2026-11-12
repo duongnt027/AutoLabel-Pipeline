@@ -5,6 +5,10 @@
       "number plate",
       "registration plate"
     ],
+    "alias": [
+      "a license plate",
+      "a vehicle number plate"
+    ],
     "prompts": [
       "a clearly visible license plate, showing most of its parts",
       "a clearly visible number plate, showing most of its parts",
@@ -40,6 +44,9 @@
       "van",
       "pickup",
       "trailer truck"
+    ],
+    "alias": [
+      "a car"
     ],
     "prompts": [
       "a clearly visible car, showing most of its parts",
@@ -85,6 +92,9 @@
       "pickup",
       "trailer truck"
     ],
+    "alias": [
+      "a bus"
+    ],
     "prompts": [
       "a clearly visible bus, showing most of its parts",
       "a clearly visible minibus, showing most of its parts",
@@ -123,6 +133,9 @@
       "pickup",
       "trailer truck"
     ],
+    "alias": [
+      "a truck"
+    ],
     "prompts": [
       "a clearly visible truck, showing most of its parts",
       "a clearly visible lorry, showing most of its parts",
@@ -145,6 +158,9 @@
       "bicycle",
       "e-bike"
     ],
+    "alias": [
+      "a motorcycle"
+    ],
     "prompts": [
       "a clearly visible motorbike, showing most of its parts",
       "a clearly visible motorcycle, showing most of its parts",
@@ -160,6 +176,9 @@
       "pedestrian",
       "man",
       "woman"
+    ],
+    "alias": [
+      "a person"
     ],
     "prompts": [
       "a clearly visible person, showing most of their body",
@@ -178,6 +197,10 @@
       "flames",
       "wildfire"
     ],
+    "alias": [
+      "a fire",
+      "flames"
+    ],
     "prompts": [
       "a clearly visible fire, showing most of its parts",
       "a clearly visible flame, showing most of its parts",
@@ -190,6 +213,10 @@
     "hints": [
       "smoke",
       "smoke cloud"
+    ],
+    "alias": [
+      "smoke",
+      "a smoke cloud"
     ],
     "prompts": [
       "a clearly visible smoke, showing most of its parts",
@@ -209,6 +236,11 @@
       "dagger",
       "sword",
       "machete"
+    ],
+    "alias": [
+      "a weapon",
+      "a gun",
+      "a knife"
     ],
     "prompts": [
       "a clearly visible weapon, showing most of its parts",
@@ -230,6 +262,10 @@
       "helmet",
       "motorcycle helmet"
     ],
+    "alias": [
+      "a helmet",
+      "a person head wearing a helmet"
+    ],
     "prompts": [
       "a clearly visible head wearing a helmet, showing most of both the head and the helmet",
       "a clearly visible rider's head wearing a motorcycle helmet, showing most of both the head and the helmet",
@@ -242,6 +278,10 @@
       "head",
       "human head",
       "person's head"
+    ],
+    "alias": [
+      "a bare head without a helmet",
+      "a person head with no helmet"
     ],
     "prompts": [
       "a clearly visible head with no helmet, showing most of its parts",

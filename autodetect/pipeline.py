@@ -13,8 +13,8 @@ import sys
 import time
 from pathlib import Path
 
-from autodetect.common import (REPO_ROOT, env_float, env_int, env_list, env_path, env_str,
-                               list_images, load_env)
+from autodetect.common import (REPO_ROOT, env_bool, env_float, env_int, env_list, env_path,
+                               env_str, list_images, load_env)
 
 load_env()
 
@@ -64,6 +64,8 @@ CPU_THREADS = env_str("CPU_THREADS", "8")
 
 # Ngưỡng quyết định cuối (dùng ở autodetect/labels.py)
 MIN_CONF = env_float("AUTOLABEL_MIN_CONF", 0.2)
+# Stage 2 để VLX tự sinh prompt theo từng ảnh (xem stage2/score_vlx.py::describe_group)
+DESCRIBE = env_bool("AUTOLABEL_DESCRIBE", False)
 NMS_IOU = env_float("AUTOLABEL_NMS_IOU", 0.6)
 NMS_IOS = env_float("AUTOLABEL_NMS_IOS", 0.8)
 
@@ -233,7 +235,7 @@ def run_stage1(key: str, jobs: list, limit: int, sahi: bool):
     subprocess.run(cmd, check=True, cwd=str(cwd), env=_env())
 
 
-def run_stage2(key: str, jobs: list, limit: int):
+def run_stage2(key: str, jobs: list, limit: int, describe: bool = False):
     """Stage 2 cho proposal của 1 backend: mỗi GPU trong VLX_GPUS một tiến trình,
     chia ảnh của CẢ MẺ xen kẽ.
 
@@ -253,7 +255,8 @@ def run_stage2(key: str, jobs: list, limit: int):
         procs.append((gpu, subprocess.Popen(
             [VLX_PYTHON, str(REPO_ROOT / "stage2" / "score_vlx.py"),
              "--manifest", str(manifest), "--classes", str(CLASSES_JSON),
-             "--limit", str(limit), "--shard", f"{i}/{len(VLX_GPUS)}"],
+             "--limit", str(limit), "--shard", f"{i}/{len(VLX_GPUS)}",
+             *(["--describe"] if describe else [])],
             cwd=str(REPO_ROOT), env=_env(VLX_GPU=gpu))))
     failed = [gpu for gpu, p in procs if p.wait() != 0]
     if failed:

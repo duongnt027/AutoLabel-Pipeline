@@ -34,6 +34,29 @@ trong `classes/classes.json`:
 hẹp) cho stage 2 quyết định. Hai class dùng chung hint là bình thường — stage 1
 chỉ cần khoanh cái đầu, phân biệt đội mũ hay không là việc của stage 2.
 
+### Chế độ `--describe`: VLX tự sinh prompt theo từng ảnh
+
+Thêm trường `alias` — cụm từ chỉ thẳng vật thể, kiểu VLX hiểu tốt nhất:
+
+```json
+"helmet": { "hints": ["head"], "alias": ["a helmet", "a person head wearing a helmet"], ... }
+```
+
+`python3 run_pipeline.py /anh --describe` thì với mỗi nhóm class (cùng bộ hint):
+
+1. chấm box gốc theo `alias` → mỗi box tạm thuộc class nào;
+2. box tự tin nhất của mỗi class (tối đa `VLX_DESC_PER_CLASS`) được **nới rộng**
+   rồi cho VLX mô tả. Câu hỏi chỉ nhắc hint ("this head"), không nhắc class —
+   hỏi có hướng thì box nào cũng tự xác nhận được chính nó;
+3. **luôn lọc trùng** mô tả: trùng/gần trùng trong 1 class thì bỏ, trùng giữa 2
+   class thì bỏ cả hai (câu đó không phân biệt được gì);
+4. chấm lại box **gốc** bằng alias + mô tả của mọi class trong nhóm, cạnh tranh
+   nhau trong 1 lượt như chế độ thường.
+
+Prompt đã sinh cho từng ảnh lưu trong `votes_*/<ảnh>.json` (`"prompts"`, và
+`"caption"` ở từng box) để xem lại. Thiếu `alias` thì dùng `prompts` và ngược lại.
+Đổi chế độ thì ảnh được chấm lại (votes ghi kèm `"mode"`).
+
 ## Chạy
 
 ```bash

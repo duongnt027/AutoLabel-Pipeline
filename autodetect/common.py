@@ -63,15 +63,19 @@ def env_list(key: str) -> list:
 
 # ── Class / hint ─────────────────────────────────────────────────────────────
 def load_classes(path: Path) -> dict:
-    """{class: {"hints": [...], "prompts": [...]}} — nguồn duy nhất của bộ nhãn.
+    """{class: {"hints": [...], "prompts": [...], "alias": [...]}} — nguồn duy nhất của bộ nhãn.
 
-    hints  = từ khoá cho stage 1 vẽ box (thô, rộng, nhiều từ đồng nghĩa)
+    hints   = từ khoá cho stage 1 vẽ box (thô, rộng, nhiều từ đồng nghĩa)
     prompts = câu mô tả cho stage 2 chấm điểm (hẹp, phân biệt các class chung hint)
+    alias   = cụm từ chỉ thẳng vật thể ("a helmet", "a head wearing a helmet") cho
+              stage 2 chế độ --describe. Thiếu 1 trong 2 thì lấy cái còn lại.
     """
     classes = json.loads(Path(path).read_text(encoding="utf-8"))
     for name, spec in classes.items():
-        if not spec.get("hints") or not spec.get("prompts"):
-            raise SystemExit(f"❌ class '{name}' thiếu 'hints' hoặc 'prompts' trong {path}")
+        if not spec.get("hints") or not (spec.get("prompts") or spec.get("alias")):
+            raise SystemExit(f"❌ class '{name}' thiếu 'hints' hoặc 'prompts'/'alias' trong {path}")
+        spec["prompts"] = spec.get("prompts") or spec["alias"]
+        spec["alias"] = spec.get("alias") or spec["prompts"]
     return classes
 
 

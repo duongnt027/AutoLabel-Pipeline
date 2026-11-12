@@ -22,11 +22,18 @@ CHẠY BẰNG PYTHON CỦA ENV `vlx` (torch 2.8 + transformers 5.13).
 sys.path, file cùng tên sẽ che mất package `vlx_seek` của repo VLX-Seek.)
 
     $VLX_PYTHON stage2/score_vlx.py --manifest jobs.json --shard 0/2
+    $VLX_PYTHON stage2/score_vlx.py --manifest jobs.json --describe
+
+--describe (hoặc AUTOLABEL_DESCRIBE=1): prompt KHÔNG lấy cố định từ "prompts" mà
+VLX tự sinh theo TỪNG ẢNH — xem describe_group(). Mỗi nhóm class tốn 2-3 lượt
+gọi thay vì 1. File votes ghi kèm "mode" nên đổi chế độ thì ảnh được chấm lại,
+không lẫn điểm của 2 chế độ.
 """
 
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from collections import deque
@@ -34,8 +41,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from autodetect.common import (IMG_EXTS, env_float, env_int, env_path, env_str,  # noqa: E402
-                               iter_jsonl, load_classes, load_env)
+from autodetect.common import (IMG_EXTS, env_bool, env_float, env_int, env_path,  # noqa: E402
+                               env_str, iter_jsonl, load_classes, load_env)
 
 load_env()
 
@@ -55,6 +62,23 @@ VLX_TASK = "detection"
 TOPK = env_int("AUTOLABEL_TOPK", 40)
 NMS_IOU = env_float("AUTOLABEL_NMS_IOU", 0.6)
 NMS_IOS = env_float("AUTOLABEL_NMS_IOS", 0.9)
+
+# ── Chế độ --describe: VLX tự sinh prompt theo từng ảnh ─────────────────────
+DESCRIBE = env_bool("AUTOLABEL_DESCRIBE", False)
+# Task + câu hỏi mô tả vùng. {hint} = hint đầu tiên của nhóm class ("head",
+# "car"...): câu hỏi trung lập, KHÔNG được nhắc tên class.
+DESC_TASK = env_str("VLX_DESC_TASK", "brief_region_caption")
+DESC_TEXT = env_str("VLX_DESC_TEXT", "Briefly describe this {hint}.")
+DESC_PAD = env_float("VLX_DESC_PAD", 0.25)            # nới box mỗi phía 25% khi mô tả
+DESC_BATCH = env_int("VLX_DESC_BATCH", 8)             # số box mỗi lượt mô tả
+DESC_PER_CLASS = env_int("VLX_DESC_PER_CLASS", 6)     # mô tả tối đa N box/class/ảnh (0 = mọi box)
+DESC_MIN_ALIAS = env_float("VLX_DESC_MIN_ALIAS", 0.3) # box phải khớp alias >= mức này mới được mô tả
+DESC_MAX_WORDS = env_int("VLX_DESC_MAX_WORDS", 12)    # cắt mô tả còn N từ
+DESC_MAX_PROMPTS = env_int("VLX_DESC_MAX_PROMPTS", 6) # giữ tối đa N mô tả/class sau lọc trùng
+DESC_DEDUP = env_float("VLX_DESC_DEDUP", 0.8)         # Jaccard theo từ >= mức này = trùng
+# Lượt verify có nhiều category hơn, mỗi category bị chép lại vào đầu ra -> cần
+# nhiều token hơn VLX_MAX_NEW_TOKENS.
+DESC_MAX_NEW_TOKENS = env_int("VLX_DESC_MAX_NEW_TOKENS", 512)
 
 from PIL import Image  # noqa: E402
 
@@ -98,49 +122,189 @@ def load_worker():
     return worker
 
 
-def score_boxes(worker, image, boxes, subset) -> dict:
-    """1 lượt gọi cho cả nhóm class -> {class: [confidence từng box]}.
+def norm_text(text: str) -> str:
+    """Chuẩn hoá 1 câu prompt/mô tả để so trùng VÀ để làm khoá tra ngược.
 
-    Category = TOÀN BỘ prompt của mọi class trong nhóm, gửi trong cùng một lượt:
-    model coi chúng loại trừ nhau nên tự chọn mô tả khớp nhất cho từng box, tức
-    tự phân biệt các class dùng chung hint (helmet / no helmet, car / bus / truck).
-    Box khớp bất kỳ prompt nào của một class thì thuộc class đó.
+    Câu gửi cho VLX luôn là bản đã chuẩn hoá, nên chữ model lặp lại trong
+    <ground>...</ground> đem chuẩn hoá lại vẫn khớp đúng khoá.
+    """
+    text = re.sub(r"<[^>]+>", " ", text.lower())
+    text = re.sub(r"[^a-z0-9'\- ]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip(" -'")
+
+
+def ground(worker, image, boxes, cats, max_new_tokens) -> tuple:
+    """1 lượt gọi detection: mỗi box được gán cho NHIỀU NHẤT 1 category.
+
+    cats = [(text, tên class)]. Trả (conf, conf_text):
+        conf      {class: [confidence từng box]}
+        conf_text {text:  [confidence từng box]}  -> biết prompt nào đã khớp
+    Mọi category gửi cùng 1 lượt nên model coi chúng LOẠI TRỪ NHAU và tự chọn
+    câu khớp nhất cho từng box — đó là thứ phân biệt helmet / no helmet.
     """
     import torch
 
-    cats = [(text, cls_name)                     # [(text category, tên class)]
-            for cls_name, spec in subset.items()
-            for text in spec["prompts"]]
-    cat_class = {text.strip().lower(): cls_name for text, cls_name in cats}
+    cat_class = {norm_text(text): cls_name for text, cls_name in cats}
+    conf = {c: [0.0] * len(boxes) for c in dict.fromkeys(c for _, c in cats)}
+    conf_text = {t: [0.0] * len(boxes) for t in cat_class}
 
-    worker.run_task(image, VLX_TASK, [text for text, _ in cats], lang="en",
-                    bbox_list=boxes, max_new_tokens=VLX_MAX_NEW_TOKENS,
-                    temperature=0.0, top_p=1.0)
+    worker.run_task(image, VLX_TASK, list(cat_class), lang="en", bbox_list=boxes,
+                    max_new_tokens=max_new_tokens, temperature=0.0, top_p=1.0)
 
     # model sắp xếp box lại bên trong (mm_bbox_order_mode=raster) -> map ngược
     _, sorted_to_caller = worker._order_boxes(worker._validate_boxes(boxes, image))
     ids = worker.obj_ids[:len(boxes)]
-    conf = {c: [0.0] * len(boxes) for c in subset}
     tok = worker.tokenizer
     cur, buf = None, ""
     for token, step in zip(worker.last["seq"][0, worker.last["n_in"]:].tolist(),
                            worker.last["scores"]):
         buf += tok.decode([token])
         if "</ground>" in buf:                   # model đang liệt kê box cho category nào
-            cur = cat_class.get(buf.split("<ground>")[-1].split("</ground>")[0].strip().lower())
+            cur = norm_text(buf.split("<ground>")[-1].split("</ground>")[0])
+            cur = cur if cur in cat_class else None
             buf = ""
         if cur and token in ids:
             prob = torch.softmax(step[:len(ids)], -1).tolist()
-            row = conf[cur]
+            row, trow = conf[cat_class[cur]], conf_text[cur]
             for si, p in enumerate(prob):
                 ci = sorted_to_caller[si]
-                if p > row[ci]:
-                    row[ci] = p
-    return conf
+                row[ci] = max(row[ci], p)
+                trow[ci] = max(trow[ci], p)
+    return conf, conf_text
 
 
-def score_image(worker, rec, image, classes) -> tuple:
-    """Chấm mọi proposal của 1 ảnh -> ([{"box","score","conf"}], số lượt gọi).
+def caption(worker, image, boxes, text) -> list:
+    """Mô tả từng box (chia lô DESC_BATCH box/lượt) -> [mô tả đã chuẩn hoá hoặc ""]."""
+    out = [""] * len(boxes)
+    for s in range(0, len(boxes), DESC_BATCH):
+        chunk = boxes[s:s + DESC_BATCH]
+        res = worker.run_task(image, DESC_TASK, text, lang="en", bbox_list=chunk,
+                              max_new_tokens=DESC_MAX_NEW_TOKENS, temperature=0.0, top_p=1.0)
+        answer = res["answer"] if isinstance(res, dict) else str(res)
+        try:
+            _, sorted_to_caller = worker._order_boxes(worker._validate_boxes(chunk, image))
+        except Exception:
+            sorted_to_caller = list(range(len(chunk)))
+        marks = list(re.finditer(r"<obj(\d+)>", answer))
+        if not marks and len(chunk) == 1:        # 1 box: model có thể trả thẳng câu mô tả
+            out[s] = norm_text(answer)
+        for i, m in enumerate(marks):
+            n = int(m.group(1))
+            if n >= len(sorted_to_caller):
+                continue
+            end = marks[i + 1].start() if i + 1 < len(marks) else len(answer)
+            ci = s + sorted_to_caller[n]
+            if not out[ci]:
+                out[ci] = norm_text(answer[m.end():end])
+    # Cắt bớt chữ: mỗi category bị model chép lại nguyên văn vào đầu ra của bước
+    # verify, mô tả dài là ăn hết ngân sách token trước khi kịp liệt kê box.
+    return [" ".join(c.split()[:DESC_MAX_WORDS]) for c in out]
+
+
+def pad_box(box, w, h, ratio):
+    """Nới box ra mỗi phía `ratio` lần cạnh tương ứng, kẹp trong ảnh -> có ngữ cảnh."""
+    x1, y1, x2, y2 = box
+    dx, dy = (x2 - x1) * ratio, (y2 - y1) * ratio
+    return [max(0.0, x1 - dx), max(0.0, y1 - dy), min(float(w), x2 + dx), min(float(h), y2 + dy)]
+
+
+def _similar(a: set, b: set) -> bool:
+    return bool(a | b) and len(a & b) / len(a | b) >= DESC_DEDUP
+
+
+def dedup_prompts(by_class: dict, anchors: dict) -> dict:
+    """{class: [mô tả, xếp từ đáng tin nhất]} -> {class: [mô tả đã lọc]}. LUÔN chạy.
+
+    1. trong 1 class: bỏ câu trùng / gần trùng (Jaccard theo từ >= DESC_DEDUP), bỏ
+       câu trùng alias (alias đã có sẵn trong lượt verify), giữ tối đa
+       DESC_MAX_PROMPTS câu -> ít category hơn, VLX trả lời nhanh hơn.
+    2. giữa các class: câu (gần) trùng nhau ở 2 class thì bỏ ở CẢ HAI — câu đó
+       không phân biệt được 2 class, để lại chỉ làm VLX gán box lung tung.
+    """
+    kept = {}
+    for cls_name, texts in by_class.items():
+        seen = [set(a.split()) for a in anchors.get(cls_name, [])]
+        out = []
+        for t in texts:
+            ws = set(t.split())
+            if not t or any(_similar(ws, s) for s in seen):
+                continue
+            seen.append(ws)
+            out.append(t)
+            if len(out) >= DESC_MAX_PROMPTS:
+                break
+        kept[cls_name] = out
+
+    words = {(c, t): set(t.split()) for c, ts in kept.items() for t in ts}
+    clash = {key for key in words for other in words
+             if key[0] != other[0] and _similar(words[key], words[other])}
+    return {c: [t for t in ts if (c, t) not in clash] for c, ts in kept.items()}
+
+
+def describe_group(worker, image, boxes, subset, hint) -> tuple:
+    """Chế độ --describe cho 1 nhóm class -> (conf, thông tin để lưu lại).
+
+    1. ALIAS  (box gốc)   : 1 lượt detection với alias của mọi class trong nhóm
+                            -> mỗi box tạm thuộc class nào, tự tin bao nhiêu.
+    2. MÔ TẢ (box có pad) : chỉ hỏi box tự tin nhất của từng class. Câu hỏi
+                            nhắc HINT ("this head"), KHÔNG nhắc class ("this
+                            helmet") — hỏi có hướng thì model chiều theo câu hỏi
+                            và box nào cũng tự xác nhận được chính nó.
+    3. LỌC TRÙNG          : dedup_prompts.
+    4. VERIFY (box gốc)   : 1 lượt detection, category = alias + mô tả của MỌI
+                            class trong nhóm, cạnh tranh nhau như chế độ thường.
+    Không còn mô tả nào sau khi lọc thì dùng luôn kết quả bước 1, đỡ 1 lượt gọi.
+    """
+    w, h = image.size
+    alias = {}
+    for cls_name, spec in subset.items():
+        alias[cls_name] = list(dict.fromkeys(norm_text(a) for a in spec["alias"] if norm_text(a)))
+    owners = {}
+    for cls_name, texts in alias.items():
+        for t in texts:
+            owners.setdefault(t, set()).add(cls_name)
+    alias = {c: [t for t in ts if len(owners[t]) == 1] for c, ts in alias.items()}
+    cats = [(t, c) for c, ts in alias.items() for t in ts]
+    if not cats:
+        return {c: [0.0] * len(boxes) for c in subset}, {}, 0
+
+    conf_a, _ = ground(worker, image, boxes, cats, VLX_MAX_NEW_TOKENS)
+    n_calls = 1
+
+    # box -> class alias tự tin nhất; mỗi class lấy tối đa DESC_PER_CLASS box
+    pick = {}
+    for i in range(len(boxes)):
+        cls_name, p = max(((c, conf_a[c][i]) for c in conf_a), key=lambda kv: kv[1])
+        if p >= DESC_MIN_ALIAS:
+            pick.setdefault(cls_name, []).append((p, i))
+    chosen = []
+    for cls_name, items in pick.items():
+        items.sort(reverse=True)
+        chosen += [(cls_name, p, i) for p, i in (items[:DESC_PER_CLASS] if DESC_PER_CLASS else items)]
+    if not chosen:
+        return conf_a, {"alias": alias, "captions": {}, "prompts": {}}, n_calls
+
+    question = DESC_TEXT.format(hint=hint)
+    caps = caption(worker, image, [pad_box(boxes[i], w, h, DESC_PAD) for _, _, i in chosen],
+                   question)
+    n_calls += -(-len(chosen) // DESC_BATCH)
+
+    by_class = {}
+    for (cls_name, p, i), cap in sorted(zip(chosen, caps), key=lambda x: -x[0][1]):
+        by_class.setdefault(cls_name, []).append(cap)
+    prompts = dedup_prompts(by_class, alias)
+    info = {"alias": alias, "prompts": prompts,
+            "captions": {i: cap for (_, _, i), cap in zip(chosen, caps) if cap}}
+    if not any(prompts.values()):
+        return conf_a, info, n_calls
+
+    cats += [(t, c) for c, ts in prompts.items() for t in ts]
+    conf_v, _ = ground(worker, image, boxes, cats, DESC_MAX_NEW_TOKENS)
+    return conf_v, info, n_calls + 1
+
+
+def score_image(worker, rec, image, classes, describe=False) -> tuple:
+    """Chấm mọi proposal của 1 ảnh -> ([{"box","score","conf"}], số lượt gọi, prompt đã dùng).
 
     Gom class theo BỘ HINT: class cùng bộ hint (helmet / no helmet) dùng chung
     danh sách proposal và chung 1 lượt gọi. Box của một class được gộp từ MỌI
@@ -157,6 +321,7 @@ def score_image(worker, rec, image, classes) -> tuple:
         by_hints.setdefault(tuple(spec["hints"]), []).append(cls_name)
 
     records = {}
+    used = {}
     # Không đưa nhiều box hơn số token <objN> model có: box thừa model không có
     # cách nào chỉ tới.
     cap = min(TOPK, len(worker.obj_ids))
@@ -165,14 +330,37 @@ def score_image(worker, rec, image, classes) -> tuple:
         items = suppress([it for h in hints for it in groups.get(h, ())], NMS_IOU, NMS_IOS)[:cap]
         if not items:
             continue
-        conf = score_boxes(worker, image, [b for _, b in items], {c: classes[c] for c in names})
-        n_calls += 1
-        for cls_name in names:
-            for (score, box), p in zip(items, conf[cls_name]):
-                key = tuple(round(v, 2) for v in box)
-                rec_box = records.setdefault(key, {"box": box, "score": score, "conf": {}})
-                rec_box["conf"][cls_name] = p
-    return list(records.values()), n_calls
+        boxes = [b for _, b in items]
+        subset = {c: classes[c] for c in names}
+        captions = {}
+        if describe:
+            conf, info, calls = describe_group(worker, image, boxes, subset, hints[0])
+            captions = info.get("captions", {})
+            used[" | ".join(names)] = {"alias": info.get("alias", {}),
+                                       "prompts": info.get("prompts", {})}
+        else:
+            cats = [(t, c) for c in names for t in classes[c]["prompts"]]
+            conf, _ = ground(worker, image, boxes, cats, VLX_MAX_NEW_TOKENS)
+            calls = 1
+        n_calls += calls
+        for i, (score, box) in enumerate(items):
+            key = tuple(round(v, 2) for v in box)
+            rec_box = records.setdefault(key, {"box": box, "score": score, "conf": {}})
+            for cls_name in names:
+                rec_box["conf"][cls_name] = conf.get(cls_name, [0.0] * len(boxes))[i]
+            if i in captions:
+                rec_box.setdefault("caption", {})[" | ".join(names)] = captions[i]
+    return list(records.values()), n_calls, used
+
+
+def vote_mode(path: Path):
+    """Chế độ đã chấm file votes này (None = chưa có). File cũ không ghi mode = prompts."""
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("mode", "prompts")
+    except json.JSONDecodeError:
+        return None                  # file ghi dở (Ctrl+C) -> chấm lại
 
 
 def load_jobs(args) -> list:
@@ -200,7 +388,11 @@ def main():
                     default=env_path("AUTOLABEL_CLASSES", "classes/classes.json"))
     ap.add_argument("--shard", default="", help='"0/2" = phần 0 trong 2 tiến trình song song')
     ap.add_argument("--limit", type=int, default=0, help="chỉ chạy N ảnh đầu mỗi thư mục")
+    ap.add_argument("--describe", action="store_true", default=DESCRIBE,
+                    help="VLX tự sinh prompt theo từng ảnh (alias -> mô tả -> verify)")
     args = ap.parse_args()
+    mode = "describe" if args.describe else "prompts"
+    print(f"   chế độ chấm: {mode}")
 
     classes = load_classes(args.classes)
     jobs = load_jobs(args)
@@ -224,7 +416,7 @@ def main():
 
     todo = {}                       # {chỉ số job: set stem cần chạy}
     for k, stem in plan:
-        if not Path(jobs[k]["votes"], f"{stem}.json").exists():
+        if vote_mode(Path(jobs[k]["votes"], f"{stem}.json")) != mode:
             todo.setdefault(k, set()).add(stem)
     n_todo = sum(len(v) for v in todo.values())
     print(f"   {len(plan)} ảnh của {len(jobs)} thư mục, đã có {len(plan) - n_todo}, "
@@ -250,10 +442,13 @@ def main():
                 print(f"   [{i}/{n_todo}] {rec['stem']}: ❌ không tìm thấy ảnh, bỏ qua")
                 continue
             image = Image.open(path).convert("RGB")
-            records, calls = score_image(worker, rec, image, classes)
-            Path(job["votes"], f"{rec['stem']}.json").write_text(json.dumps(
-                {"stem": rec["stem"], "w": rec["w"], "h": rec["h"], "boxes": records}),
-                encoding="utf-8")
+            records, calls, used = score_image(worker, rec, image, classes, args.describe)
+            out = {"stem": rec["stem"], "w": rec["w"], "h": rec["h"], "mode": mode,
+                   "boxes": records}
+            if used:
+                out["prompts"] = used        # prompt VLX đã tự sinh cho ảnh này
+            Path(job["votes"], f"{rec['stem']}.json").write_text(json.dumps(out),
+                                                                 encoding="utf-8")
             n_in += len(rec["boxes"])
             n_calls += calls
             now = time.time()
