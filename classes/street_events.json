@@ -1,0 +1,305 @@
+{
+  "_doc": [
+    "Bộ nhãn cho chế độ EVENT (run_events.py). File có 3 phần:",
+    "  classes : đối tượng chủ thể — ĐÚNG định dạng classes.json thường (hints/alias/prompts),",
+    "            dùng cho stage 1 + stage 2 như chế độ detection thường. Class CÙNG BỘ HINT",
+    "            được VLX chấm chung 1 lượt (cạnh tranh nhau) -> 7 nhóm = 7 lượt gọi/ảnh.",
+    "            role = anchor : vật làm nên hành vi (hàng hoá, xe đẩy, biển...) — nhóm phải có",
+    "                            ít nhất 1 anchor mới được đem đi mô tả;",
+    "            role = context: người, xe, cây, cột — chỉ GẮN vào nhóm anchor gần nhất,",
+    "                            không tự tạo nhóm và không nối 2 nhóm với nhau.",
+    "  events  : hành vi cần phát hiện. captions (tiếng Anh, ngắn) là category cho VLX + câu",
+    "            gốc để so khớp với caption VLX sinh ra; keywords bổ sung cho so khớp chữ.",
+    "            requires = AND của các OR: [[A, B], [C]] = (A hoặc B) và C phải có trong nhóm.",
+    "            CHỈ mô tả thứ nhìn thấy được. Điều kiện ngoài ảnh (giờ quy định, tuyến phố cấm,",
+    "            có giấy phép hay không) lọc ở hệ thống bên ngoài theo events_summary.jsonl.",
+    "  reject  : caption 'rác' — nhóm khớp reject hơn mọi event thì bị loại."
+  ],
+
+  "classes": {
+    "person": {
+      "role": "context",
+      "hints": ["person", "street vendor"],
+      "alias": ["a person"],
+      "prompts": ["a clearly visible person, standing, sitting or walking",
+                  "a street vendor selling goods"]
+    },
+
+    "motorcycle": {
+      "role": "context",
+      "hints": ["motorcycle", "scooter", "car", "van", "truck", "pickup truck", "bicycle",
+                "tricycle", "garbage truck", "garbage cart", "pushcart", "food cart", "hand cart"],
+      "alias": ["a motorcycle"],
+      "prompts": ["a motorcycle or scooter", "a parked motorbike"]
+    },
+    "car": {
+      "role": "context",
+      "hints": ["motorcycle", "scooter", "car", "van", "truck", "pickup truck", "bicycle",
+                "tricycle", "garbage truck", "garbage cart", "pushcart", "food cart", "hand cart"],
+      "alias": ["a car"],
+      "prompts": ["a car, van or SUV", "a parked passenger car"]
+    },
+    "truck": {
+      "role": "context",
+      "hints": ["motorcycle", "scooter", "car", "van", "truck", "pickup truck", "bicycle",
+                "tricycle", "garbage truck", "garbage cart", "pushcart", "food cart", "hand cart"],
+      "alias": ["a truck"],
+      "prompts": ["a cargo truck or pickup truck", "a delivery truck"]
+    },
+    "bicycle": {
+      "role": "context",
+      "hints": ["motorcycle", "scooter", "car", "van", "truck", "pickup truck", "bicycle",
+                "tricycle", "garbage truck", "garbage cart", "pushcart", "food cart", "hand cart"],
+      "alias": ["a bicycle"],
+      "prompts": ["a bicycle or cargo tricycle", "a bicycle loaded with goods"]
+    },
+    "garbage vehicle": {
+      "role": "anchor",
+      "hints": ["motorcycle", "scooter", "car", "van", "truck", "pickup truck", "bicycle",
+                "tricycle", "garbage truck", "garbage cart", "pushcart", "food cart", "hand cart"],
+      "alias": ["a garbage truck", "a garbage cart"],
+      "prompts": ["a garbage truck collecting waste",
+                  "a hand-pushed garbage cart full of trash"]
+    },
+    "pushcart": {
+      "role": "anchor",
+      "hints": ["motorcycle", "scooter", "car", "van", "truck", "pickup truck", "bicycle",
+                "tricycle", "garbage truck", "garbage cart", "pushcart", "food cart", "hand cart"],
+      "alias": ["a pushcart", "a food cart"],
+      "prompts": ["a wheeled pushcart used as a mobile food or goods stall",
+                  "a hand cart loaded with goods for sale"]
+    },
+
+    "goods display": {
+      "role": "anchor",
+      "hints": ["goods", "fruit", "vegetables", "display rack", "crate", "basket", "shoulder pole",
+                "plastic stool", "plastic chair", "table", "parasol", "stove", "cooking pot",
+                "grill", "gas cylinder"],
+      "alias": ["goods for sale"],
+      "prompts": ["goods or merchandise displayed for sale",
+                  "a rack, shelf or crates of products",
+                  "piles of fruit or vegetables for sale"]
+    },
+    "carrying basket": {
+      "role": "anchor",
+      "hints": ["goods", "fruit", "vegetables", "display rack", "crate", "basket", "shoulder pole",
+                "plastic stool", "plastic chair", "table", "parasol", "stove", "cooking pot",
+                "grill", "gas cylinder"],
+      "alias": ["a shoulder pole with baskets"],
+      "prompts": ["a bamboo shoulder pole with two hanging baskets",
+                  "a basket of goods carried by a street vendor"]
+    },
+    "food stall furniture": {
+      "role": "anchor",
+      "hints": ["goods", "fruit", "vegetables", "display rack", "crate", "basket", "shoulder pole",
+                "plastic stool", "plastic chair", "table", "parasol", "stove", "cooking pot",
+                "grill", "gas cylinder"],
+      "alias": ["plastic stools and tables"],
+      "prompts": ["plastic stools and low tables of a street food stall",
+                  "a large parasol shading a street stall"]
+    },
+    "cooking equipment": {
+      "role": "anchor",
+      "hints": ["goods", "fruit", "vegetables", "display rack", "crate", "basket", "shoulder pole",
+                "plastic stool", "plastic chair", "table", "parasol", "stove", "cooking pot",
+                "grill", "gas cylinder"],
+      "alias": ["a cooking stove"],
+      "prompts": ["a stove, grill or cooking pot used to cook food",
+                  "a gas cylinder next to a cooking stove"]
+    },
+
+    "repair tools": {
+      "role": "anchor",
+      "hints": ["tool box", "air compressor", "tire", "jack", "water hose", "pressure washer",
+                "bucket", "machine", "generator", "welding machine", "engine"],
+      "alias": ["vehicle repair tools"],
+      "prompts": ["vehicle repair tools, an air compressor or a hydraulic jack",
+                  "spare tires and wheels for repair"]
+    },
+    "car wash equipment": {
+      "role": "anchor",
+      "hints": ["tool box", "air compressor", "tire", "jack", "water hose", "pressure washer",
+                "bucket", "machine", "generator", "welding machine", "engine"],
+      "alias": ["a water hose for washing"],
+      "prompts": ["a water hose or pressure washer used to wash vehicles",
+                  "a bucket of soapy water for washing"]
+    },
+    "machinery": {
+      "role": "anchor",
+      "hints": ["tool box", "air compressor", "tire", "jack", "water hose", "pressure washer",
+                "bucket", "machine", "generator", "welding machine", "engine"],
+      "alias": ["a machine"],
+      "prompts": ["a machine, generator or piece of equipment",
+                  "a welding machine or industrial equipment"]
+    },
+
+    "signboard": {
+      "role": "anchor",
+      "hints": ["shop sign", "signboard", "standing banner", "banner", "billboard"],
+      "alias": ["an advertising sign"],
+      "prompts": ["an advertising sign, signboard or standing banner",
+                  "a shop sign displaying a business name",
+                  "a banner hung on a tree or a pole"]
+    },
+
+    "obstacle": {
+      "role": "anchor",
+      "hints": ["traffic cone", "barrier", "rock", "debris", "trash", "garbage bag",
+                "garbage pile", "spill", "sand pile", "gravel", "bricks", "cement bags",
+                "steel bars", "trash bin", "dumpster"],
+      "alias": ["an obstacle on the road"],
+      "prompts": ["a traffic cone, barrier or rock placed on the road",
+                  "an object blocking the road or sidewalk"]
+    },
+    "waste": {
+      "role": "anchor",
+      "hints": ["traffic cone", "barrier", "rock", "debris", "trash", "garbage bag",
+                "garbage pile", "spill", "sand pile", "gravel", "bricks", "cement bags",
+                "steel bars", "trash bin", "dumpster"],
+      "alias": ["trash on the ground"],
+      "prompts": ["trash, garbage bags or a pile of waste",
+                  "a liquid, oil or chemical spill on the ground"]
+    },
+    "waste container": {
+      "role": "anchor",
+      "hints": ["traffic cone", "barrier", "rock", "debris", "trash", "garbage bag",
+                "garbage pile", "spill", "sand pile", "gravel", "bricks", "cement bags",
+                "steel bars", "trash bin", "dumpster"],
+      "alias": ["a trash bin"],
+      "prompts": ["a trash bin or wheeled garbage container",
+                  "a dumpster at a garbage collection point"]
+    },
+    "construction material": {
+      "role": "anchor",
+      "hints": ["traffic cone", "barrier", "rock", "debris", "trash", "garbage bag",
+                "garbage pile", "spill", "sand pile", "gravel", "bricks", "cement bags",
+                "steel bars", "trash bin", "dumpster"],
+      "alias": ["construction materials"],
+      "prompts": ["a pile of sand, gravel or bricks",
+                  "bags of cement, steel bars or building materials"]
+    },
+
+    "tree": {
+      "role": "context",
+      "hints": ["tree", "tree trunk", "utility pole", "lamp post"],
+      "alias": ["a tree"],
+      "prompts": ["a tree or tree trunk on the street"]
+    },
+    "utility pole": {
+      "role": "context",
+      "hints": ["tree", "tree trunk", "utility pole", "lamp post"],
+      "alias": ["an electric pole"],
+      "prompts": ["an electric utility pole or lamp post"]
+    }
+  },
+
+  "events": {
+    "street_vending": {
+      "name_vi": "Bán hàng rong hoặc bán hàng hóa nhỏ lẻ khác trên lòng đường, trên vỉa hè các tuyến phố có quy định cấm bán hàng",
+      "requires": [["carrying basket", "goods display", "pushcart"]],
+      "captions": ["a street vendor selling goods on the road or sidewalk",
+                   "a vendor with a shoulder pole and baskets of goods",
+                   "a person selling items from a bicycle or basket on the street"],
+      "keywords": ["vendor", "peddler", "selling", "sell", "basket", "shoulder pole", "hawker"]
+    },
+    "sidewalk_food_service": {
+      "name_vi": "Sử dụng trái phép lòng đường, vỉa hè để: kinh doanh dịch vụ ăn uống",
+      "requires": [["food stall furniture", "cooking equipment"]],
+      "captions": ["a street food stall with plastic stools and tables on the sidewalk",
+                   "people eating and drinking at a roadside food stall",
+                   "a vendor cooking food on the sidewalk"],
+      "keywords": ["food", "eating", "drinking", "restaurant", "stool", "cooking", "noodle",
+                   "coffee", "tea", "stall"]
+    },
+    "sidewalk_goods_display": {
+      "name_vi": "Sử dụng trái phép lòng đường, vỉa hè để: bày, bán hàng hóa",
+      "requires": [["goods display"]],
+      "captions": ["goods and merchandise displayed for sale on the sidewalk",
+                   "a shop's products placed out onto the pavement",
+                   "racks and crates of goods on the sidewalk"],
+      "keywords": ["goods", "merchandise", "products", "display", "rack", "shelf", "crates",
+                   "for sale", "shop"]
+    },
+    "street_vehicle_repair": {
+      "name_vi": "Sử dụng trái phép lòng đường, vỉa hè để: sửa chữa phương tiện, máy móc, thiết bị",
+      "requires": [["repair tools", "machinery"]],
+      "captions": ["a mechanic repairing a motorcycle on the sidewalk",
+                   "vehicle repair tools and tires on the pavement",
+                   "a person fixing a machine or vehicle on the street"],
+      "keywords": ["repair", "repairing", "fixing", "mechanic", "tire", "tools", "wrench",
+                   "compressor"]
+    },
+    "street_vehicle_washing": {
+      "name_vi": "Sử dụng trái phép lòng đường, vỉa hè để: rửa xe",
+      "requires": [["car wash equipment"]],
+      "captions": ["a person washing a car or motorcycle with a water hose on the street",
+                   "a vehicle covered in soap foam being washed on the sidewalk"],
+      "keywords": ["washing", "wash", "hose", "water", "foam", "soap", "spraying"]
+    },
+    "sidewalk_signboard": {
+      "name_vi": "Sử dụng trái phép lòng đường, vỉa hè để: đặt, treo biển hiệu, biển quảng cáo.",
+      "requires": [["signboard"]],
+      "captions": ["an advertising sign or standing banner placed on the sidewalk",
+                   "a shop signboard placed on the pavement blocking pedestrians"],
+      "keywords": ["sign", "signboard", "banner", "advertising", "advertisement", "billboard",
+                   "standee"]
+    },
+    "sidewalk_machinery_sale_or_production": {
+      "name_vi": "Bày, bán máy móc, thiết bị, vật tư hoặc sản xuất, gia công hàng hóa trên lòng đường, vỉa hè",
+      "requires": [["machinery", "construction material"]],
+      "captions": ["machines, equipment or supplies displayed for sale on the sidewalk",
+                   "a worker welding or fabricating goods on the sidewalk"],
+      "keywords": ["machine", "machinery", "equipment", "welding", "cutting", "fabricating",
+                   "workshop", "metal", "supplies"]
+    },
+    "road_obstacle_or_spill": {
+      "name_vi": "Đặt, để chướng ngại vật, vật cản khác trái phép trên đường bộ; đổ chất gây trơn trượt trên đường bộ; đổ, xả thải, làm rơi vãi hóa chất, chất thải gây mất an toàn giao thông đường bộ",
+      "requires": [["obstacle", "waste"]],
+      "captions": ["obstacles such as rocks, cones or barriers placed on the road",
+                   "trash or waste dumped on the road",
+                   "a slippery liquid or chemical spill on the road surface"],
+      "keywords": ["obstacle", "blocking", "cone", "barrier", "rock", "trash", "garbage",
+                   "waste", "spill", "oil", "debris", "dumped"]
+    },
+    "pushcart_mobile_stall": {
+      "name_vi": "Dùng xe đẩy làm quầy hàng lưu động trên đường",
+      "requires": [["pushcart"]],
+      "captions": ["a push cart used as a mobile food or goods stall on the street",
+                   "a vendor selling from a wheeled cart on the road"],
+      "keywords": ["cart", "pushcart", "trolley", "wheeled", "mobile stall", "vendor"]
+    },
+    "construction_material_on_street": {
+      "name_vi": "Để vật liệu xây dựng dưới lòng đường hoặc vỉa hè trái quy định",
+      "requires": [["construction material"]],
+      "captions": ["construction materials such as sand, bricks or cement piled on the road",
+                   "building materials stacked on the sidewalk"],
+      "keywords": ["sand", "gravel", "bricks", "cement", "construction", "building materials",
+                   "steel", "rebar", "pile"]
+    },
+    "sign_on_tree_or_pole": {
+      "name_vi": "Treo biển hiệu trên cây xanh, cột điện không đúng quy định",
+      "requires": [["signboard"], ["tree", "utility pole"]],
+      "captions": ["a sign or banner hung on a tree",
+                   "an advertisement attached to an electric pole"],
+      "keywords": ["tree", "pole", "hanging", "hung", "attached", "tied", "sign", "banner"]
+    },
+    "garbage_collection": {
+      "name_vi": "Xe vận chuyển hoặc tập kết rác (sai giờ quy định: kiểm tra bên ngoài theo thời điểm ảnh)",
+      "requires": [["garbage vehicle", "waste container"]],
+      "captions": ["a garbage truck collecting trash on the street",
+                   "garbage carts and bins gathered at a collection point on the sidewalk"],
+      "keywords": ["garbage", "trash", "waste", "collection", "bin", "dumpster", "cart"]
+    }
+  },
+
+  "reject": {
+    "_doc": "Caption 'rác': vùng không rõ ràng hoặc không liên quan. Box gộp khớp reject hơn mọi event thì bị loại.",
+    "captions": ["an unclear or blurry region",
+                 "an empty road or sidewalk with nothing unusual",
+                 "vehicles driving normally on the road",
+                 "people walking normally on the sidewalk",
+                 "a vehicle parked in a parking area"],
+    "keywords": ["blurry", "unclear", "dark", "empty", "nothing", "driving", "walking",
+                 "parked", "traffic"]
+  }
+}

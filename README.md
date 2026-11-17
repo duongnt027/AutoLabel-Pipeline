@@ -57,6 +57,30 @@ Prompt đã sinh cho từng ảnh lưu trong `votes_*/<ảnh>.json` (`"prompts"`
 `"caption"` ở từng box) để xem lại. Thiếu `alias` thì dùng `prompts` và ngược lại.
 Đổi chế độ thì ảnh được chấm lại (votes ghi kèm `"mode"`).
 
+## Chế độ EVENT: phát hiện hành vi theo mô tả
+
+`python3 run_events.py /anh` — nhãn theo **hành vi** (bán hàng rong, rửa xe, đặt
+biển trên vỉa hè...) thay vì theo vật thể. Bộ nhãn: `classes/street_events.json`
+gồm `classes` (đối tượng chủ thể, định dạng y như classes.json), `events` (caption
+gốc tiếng Anh + `name_vi` + `keywords` + luật) và `reject` (caption "rác").
+
+```
+stage 1 + 2   detection thường cho các đối tượng chủ thể (người, hàng hoá, xe đẩy, biển...)
+gộp cùng class box cùng class chồng nhau -> 1 đối tượng (box bao)
+gộp nhóm      anchor (hàng hoá, biển, vật liệu...) chạm nhau -> 1 nhóm; context
+              (người, xe, cây, cột) gắn vào nhóm gần nhất, không tự lập nhóm
+stage 3       VLX brief_region_caption mô tả box nhóm (caption tự do)
+              + 1 lượt detection: box nhóm x caption của các event + reject
+quyết định    điểm = w_vlx * VLX(event) + w_text * so(caption sinh ra, caption gốc + keywords)
+              = 0 nếu nhóm thiếu class event yêu cầu (requires); khớp reject hơn -> loại
+              (chỉ xét thứ nhìn thấy; giờ / tuyến phố cấm / giấy phép lọc bên ngoài)
+```
+
+Kết quả: `labels_events/` (YOLO, id theo thứ tự `events`), `data_events.yaml`,
+`events_summary.jsonl` (mỗi box nhóm: thành phần, caption, event, lý do bị loại),
+`labels_actors/`. Đổi ngưỡng/trọng số/keywords: `run_events.py /anh --rebuild`.
+Đổi `captions` hay tham số gộp nhóm thì stage 3 tự chấm lại những ảnh liên quan.
+
 ## Chạy
 
 ```bash
@@ -137,14 +161,18 @@ thật của backend có thang điểm thấp hơn trước khi VLX kịp nhìn 
 
 ```
 run_pipeline.py       chạy cả 2 stage
+run_events.py         chế độ event: detection -> gộp nhóm -> caption -> so khớp
 run_stage1.py         chỉ stage 1
 rebuild_labels.py     dựng lại nhãn với ngưỡng khác, không chạy model
 autodetect/
 ├── common.py         .env, class/hint, hợp đồng jsonl (chỉ stdlib — mọi env import được)
+├── events.py         chế độ event: gộp nhóm, so caption, quyết định (stdlib)
 ├── labels.py         NMS + quyết định class + ghi nhãn YOLO (nơi DUY NHẤT cắt ngưỡng)
 └── pipeline.py       cấu hình + cách gọi từng stage bằng env riêng
 stage1/{llmdet,sam3,wedetect}.py    backend sinh proposal
 stage2/score_vlx.py                 chấm điểm box -> votes/
+stage3/describe_events.py           chế độ event: VLX mô tả + chấm box nhóm -> events_votes/
+classes/street_events.json          bộ đối tượng + event (chế độ event)
 classes/classes.json                bộ nhãn (hints + prompts)
 setup/                              script tạo env, đóng gói env, tải weight
 ```

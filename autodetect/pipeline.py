@@ -263,6 +263,31 @@ def run_stage2(key: str, jobs: list, limit: int, describe: bool = False):
         raise SystemExit(f"❌ stage 2 lỗi ở GPU {failed} (xem log phía trên)")
 
 
+def run_stage3(jobs: list, models: list, limit: int):
+    """Chế độ event: gộp nhóm + VLX mô tả/chấm box nhóm (stage3/describe_events.py).
+
+    Đọc votes/ của MỌI backend cùng lúc (đối tượng trùng giữa các backend được
+    gộp ở bước gộp cùng class), chia ảnh xen kẽ cho các GPU trong VLX_GPUS.
+    """
+    check_vram(VLX_GPUS, 26, "stage 3 (VLX-Seek, chế độ event)")
+    manifest = write_manifest(
+        RUNS_ROOT / ".manifest_events.json",
+        [{"name": j["name"], "images": str(j["images"]),
+          "votes": [str(j["votes"][k]) for k in models],
+          "events_votes": str(j["events_votes"])} for j in jobs])
+    procs = []
+    for i, gpu in enumerate(VLX_GPUS):
+        print(f"   GPU {gpu}: shard {i}/{len(VLX_GPUS)}")
+        procs.append((gpu, subprocess.Popen(
+            [VLX_PYTHON, str(REPO_ROOT / "stage3" / "describe_events.py"),
+             "--manifest", str(manifest), "--classes", str(CLASSES_JSON),
+             "--limit", str(limit), "--shard", f"{i}/{len(VLX_GPUS)}"],
+            cwd=str(REPO_ROOT), env=_env(VLX_GPU=gpu))))
+    failed = [gpu for gpu, p in procs if p.wait() != 0]
+    if failed:
+        raise SystemExit(f"❌ stage 3 lỗi ở GPU {failed} (xem log phía trên)")
+
+
 def summary_stage1(jobs: list, models: list):
     from autodetect.common import count_jsonl
 

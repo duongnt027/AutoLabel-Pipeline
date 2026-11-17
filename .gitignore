@@ -11,3 +11,20 @@ dist/
 __pycache__/
 *.pyc
 job_883/
+
+# Dữ liệu: chỉ push code (+ classes/*.json, .env.example), không push ảnh/nhãn/kết quả
+images_*/
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.webp
+*.tif
+*.tiff
+*.jsonl
+*.pt
+*.pth
+*.safetensors
+*.zip
+*.tar
+*.tar.gz

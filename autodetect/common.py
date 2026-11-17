@@ -71,12 +71,43 @@ def load_classes(path: Path) -> dict:
               stage 2 chế độ --describe. Thiếu 1 trong 2 thì lấy cái còn lại.
     """
     classes = json.loads(Path(path).read_text(encoding="utf-8"))
+    # File của chế độ event (classes/street_events.json) bọc bộ class trong
+    # {"classes": ..., "events": ..., "reject": ...} -> mọi stage dùng chung file đó.
+    if isinstance(classes.get("classes"), dict):
+        classes = classes["classes"]
     for name, spec in classes.items():
         if not spec.get("hints") or not (spec.get("prompts") or spec.get("alias")):
             raise SystemExit(f"❌ class '{name}' thiếu 'hints' hoặc 'prompts'/'alias' trong {path}")
         spec["prompts"] = spec.get("prompts") or spec["alias"]
         spec["alias"] = spec.get("alias") or spec["prompts"]
     return classes
+
+
+def load_events(path: Path) -> tuple:
+    """(classes, events, reject) của file chế độ event — xem classes/street_events.json.
+
+    events = {tên: {"captions", "keywords", "requires", ...}}, reject = {"captions", "keywords"}.
+    requires PHẢI chỉ tới class có thật: gõ sai tên class thì event không bao giờ
+    thoả điều kiện và im lặng không ra nhãn nào — nên báo lỗi ngay ở đây.
+    """
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw.get("events"), dict) or not raw["events"]:
+        raise SystemExit(f"❌ {path} không có mục 'events' (chế độ event cần file dạng "
+                         f"classes/street_events.json)")
+    classes = load_classes(path)
+    events = raw["events"]
+    for name, ev in events.items():
+        if not ev.get("captions"):
+            raise SystemExit(f"❌ event '{name}' thiếu 'captions' trong {path}")
+        ev.setdefault("keywords", [])
+        ev.setdefault("requires", [])
+        bad = [c for group in ev["requires"] for c in group if c not in classes]
+        if bad:
+            raise SystemExit(f"❌ event '{name}': requires có class không tồn tại {bad}")
+    reject = raw.get("reject") or {}
+    reject.setdefault("captions", [])
+    reject.setdefault("keywords", [])
+    return classes, events, reject
 
 
 def load_hints(path: Path) -> list:
